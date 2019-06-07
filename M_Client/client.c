@@ -1,6 +1,7 @@
 #include <stdio.h>				// 표준 입출력
 #include <stdlib.h>				// 표준 라이브러리
 #include <string.h>				// 문자열 처리
+#include <WinSock2.h>
 #include <Windows.h>
 #include <process.h>
 
@@ -30,6 +31,7 @@ int main(int argc, char *argv[])	// 인자로 IP와 Port, 사용자 이름을 받는다.
 		printf("Usage : %s <IP> <port> <name>\n", argv[0]);	// 사용법을 안내한다.
 		exit(1);					//  그 후 프로그램 비정상 종료
 	}
+
 	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
 		error_handling("WSAStartup() error");
 
@@ -46,7 +48,8 @@ int main(int argc, char *argv[])	// 인자로 IP와 Port, 사용자 이름을 받는다.
 		error_handling("connect() error");
 
 	//사용자 이름 전달
-	write(sock, name, BUF_SIZE);
+	//write(sock, name, BUF_SIZE);
+	send(sock, name, BUF_SIZE, 0);
 
 	snd_thread=(HANDLE)_beginthreadex(NULL, 0, send_msg, (void*)&sock, 0, &sndID);
 	rcv_thread = (HANDLE)_beginthreadex(NULL, 0, recv_msg, (void*)&sock, 0, &rcvID);
@@ -58,7 +61,7 @@ int main(int argc, char *argv[])	// 인자로 IP와 Port, 사용자 이름을 받는다.
 
 unsigned WINAPI send_msg(void * arg)   // send thread main
 {
-	int sock = *((int*)arg);		// 소켓을 받는다.
+	SOCKET sock = *((SOCKET*)arg);		// 소켓을 받는다.
 	char name_msg[BUF_SIZE];
 
 	while (1) // 무한루프 돌면서
@@ -71,7 +74,7 @@ unsigned WINAPI send_msg(void * arg)   // send thread main
 		}
 		// 정상적인 입력을 하면
 		sprintf(name_msg, "[%s] %s", name, msg);	// 이름 + 공백 + 메시지 순으로 전송
-		write(sock, name_msg, BUF_SIZE);		// 서버로 메시지 보내기
+		send(sock, name_msg, BUF_SIZE, 0);		// 서버로 메시지 보내기
 	}
 	return NULL;
 }
@@ -79,13 +82,13 @@ unsigned WINAPI send_msg(void * arg)   // send thread main
 // 수신쪽 쓰레드 함수
 unsigned WINAPI recv_msg(void * arg)   // read thread main
 {
-	int sock = *((int*)arg);		// 통신 용 소켓을 받고
+	SOCKET sock = *((SOCKET*)arg);		// 통신 용 소켓을 받고
 	char name_msg[BUF_SIZE];	// 이름 + 메시지 버퍼
 	int str_len;				// 문자열 길이
 
 	while (1)	// 무한루프 돌면서
 	{
-		str_len = read(sock, name_msg, BUF_SIZE); // 메시지가 들어오면
+		str_len = recv(sock, name_msg, BUF_SIZE, 0); // 메시지가 들어오면
 		if (str_len == -1) { // 만약 통신이 끊겼으면
 			return (void*)-1;	// 쓰레드 종료
 		}
