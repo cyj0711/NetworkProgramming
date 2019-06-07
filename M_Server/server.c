@@ -143,7 +143,9 @@ int main(int argc, char *argv[])	// 인자로 포트번호 받음
 		printf("%s is connected \n", client->name);
 
 	}
-	close(serv_sock);
+	closesocket(clnt_sock);
+	closesocket(serv_sock);
+	WSACleanup();
 	return 0;
 }
 
@@ -163,9 +165,9 @@ unsigned WINAPI handle_serv(void * arg)
 			{
 				sendMessageUser(srcv_msg, arrClient[i].socket);
 
-				close(arrClient[i].socket);
+				closesocket(arrClient[i].socket);
 			}
-			exit(0);
+			//exit(0);
 		}
 
 	}
@@ -540,6 +542,12 @@ void serveWaitingRoomMenu(int menu, Client *client, char *msg) // 사용자와 선택�
 		printHowToUse(client);
 		break;
 
+	case 'q':
+
+	case 'Q':
+
+		break;
+
 	default:
 		sendMessageUser(msg, client->socket);
 		//printWaitingRoomMenu(client);		// 잘못 입력했으면, 메뉴 다시 표시
@@ -639,7 +647,7 @@ unsigned WINAPI handle_clnt(void * arg)	// 소켓을 들고 클라이언트와 통신하는 함�
 
 	removeClient(clnt_sock);	// 클라언트와 연결이 종료되면 클라이언트 배열에서 제거한다.
 
-	close(clnt_sock);			// 소켓을 닫고
+	closesocket(clnt_sock);			// 소켓을 닫고
 	return NULL;				// 쓰레드 종료
 }
 

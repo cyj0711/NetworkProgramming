@@ -55,7 +55,8 @@ int main(int argc, char *argv[])	// 인자로 IP와 Port, 사용자 이름을 받는다.
 	rcv_thread = (HANDLE)_beginthreadex(NULL, 0, recv_msg, (void*)&sock, 0, &rcvID);
 	WaitForSingleObject(snd_thread, INFINITE);
 	WaitForSingleObject(rcv_thread, INFINITE);
-	close(sock);  // 프로그램 종료할 때 소켓 소멸 시키고 종료
+	closesocket(sock);  // 프로그램 종료할 때 소켓 소멸 시키고 종료
+	WSACleanup();
 	return 0;
 }
 
@@ -69,7 +70,8 @@ unsigned WINAPI send_msg(void * arg)   // send thread main
 		fgets(msg, BUF_SIZE, stdin);	// 키보드 입력을 받아서
 		if (!strcmp(msg, "q\n") || !strcmp(msg, "Q\n")) // q나 Q면 종료하고
 		{
-			close(sock);
+			closesocket(sock);
+			printf("disconnected\n");
 			exit(0);
 		}
 		// 정상적인 입력을 하면
@@ -93,7 +95,7 @@ unsigned WINAPI recv_msg(void * arg)   // read thread main
 			return (void*)-1;	// 쓰레드 종료
 		}
 		else if (!strcmp(name_msg, "q\n") || !strcmp(name_msg, "Q\n")) {
-			close(sock);
+			closesocket(sock);
 			exit(0);
 		}
 
