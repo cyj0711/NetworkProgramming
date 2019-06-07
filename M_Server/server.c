@@ -1,11 +1,9 @@
 #include <stdio.h>			// 표준 입출력 :wq
 #include <stdlib.h>			// 표준 라이브러리
-#include <unistd.h>			// 유닉스 표준
-#include <string.h>			// 문자열 처리
-#include <arpa/inet.h>		// 인터넷 프로토콜
-#include <sys/socket.h>		// 소켓 함수
-#include <netinet/in.h>		// 인터넷 주소 체계 (in_port_t)
-#include <pthread.h>		// 쓰레드
+#include <string.h>			// 문자열 처리	
+#include <WinSock2.h>
+#include <Windows.h>
+#include <process.h>
 
 #define BUF_SIZE 256			// 채팅할 때 메시지 최대 길이
 #define MAX_CLNT 256			// 최대 동시 접속자 수
@@ -18,12 +16,12 @@ typedef int BOOL;			// boolean 타입 선언(예, 아니오 판단 결과)
 
 							// 함수들 선언
 
-void * handle_serv(void * arg); // 서버 쓰레드용 함수
-void * handle_clnt(void * arg);		// 클라이언트 쓰레드용 함수(함수 포인터)
+unsigned WINAPI handle_serv(void * arg); // 서버 쓰레드용 함수
+unsigned WINAPI handle_clnt(void * arg);		// 클라이언트 쓰레드용 함수(함수 포인터)
 void error_handling(char * msg);	// 에러 처리 함수
 void sendMessageUser(char * msg, int socket);
 
-pthread_mutex_t mutx;		// 상호배제를 위한 전역변수
+HANDLE mutx;		// 상호배제를 위한 전역변수
 
 							// 서버에 접속한 클라이언트 구조체
 struct Client
@@ -55,19 +53,19 @@ void printHowToUse(Client * client);
 // 클라이언트를 배열에 추가 - 소켓을 주면 클라이언트 구조체변수를 생성해 준다.
 Client * addClient(int socket, char * nick)
 {
-	pthread_mutex_lock(&mutx);		// 임계영역 시작
+	WaitForSingleObject(mutx,INFINITE);		// 임계영역 시작
 	Client *client = &(arrClient[sizeClient++]);	// 미리 할당된 공간 획득
 	client->roomId = ROOM_ID_DEFAULT;					// 아무방에도 들어있지 않음
 	client->socket = socket;						// 인자로 받은 소켓 저장
 	strcpy(client->name, nick);
-	pthread_mutex_unlock(&mutx);	// 임계영역 끝
+	ReleaseMutex(mutx);	// 임계영역 끝
 	return client;	// 클라이언트 구조체 변수 반환
 }
 
 // 클라이언트를 배열에서 제거 - 소켓을 주면 클라이언트를 배열에서 삭제한다.
 void removeClient(int socket)
 {
-	pthread_mutex_lock(&mutx);		// 임계영역 시작
+	WaitForSingleObject(mutx, INFINITE);		// 임계영역 시작
 	int i = 0;
 	for (i = 0; i < sizeClient; i++)   // 접속이 끊긴 클라이언트를 삭제한다.
 	{
@@ -79,27 +77,32 @@ void removeClient(int socket)
 		}
 	}
 	sizeClient--;	// 접속중인 클라이언트 수 1 감소
-	pthread_mutex_unlock(&mutx);	// 임계영역 끝
+	ReleaseMutex(mutx);	// 임계영역 끝
 }
 
 
 int main(int argc, char *argv[])	// 인자로 포트번호 받음
 {
-	int serv_sock, clnt_sock;		// 소켓통신 용 서버 소켓과 임시 클라이언트 소켓
-	struct sockaddr_in serv_adr, clnt_adr;	// 서버 주소, 클라이언트 주소 구조체
+	WSADATA wsaData;
+	SOCKET serv_sock, clnt_sock;		// 소켓통신 용 서버 소켓과 임시 클라이언트 소켓
+	SOCKADDR_IN serv_adr, clnt_adr;	// 서버 주소, 클라이언트 주소 구조체
 	int clnt_adr_sz;				// 클라이언트 주소 구조체 크기
 	char nick[BUF_SIZE] = { 0 };
-	pthread_t t_id;					// 클라이언트 쓰레드용 ID
-	pthread_t serv_id;
+	unsigned clntID;
+	unsigned servID;
+	HANDLE t_id;					// 클라이언트 쓰레드용 ID
+	HANDLE serv_id;
 	void * thread_return;
 	// 포트 입력안했으면
 	if (argc != 2) {
 		printf("Usage : %s <port>\n", argv[0]);	// 사용법을 알려준다.
 		exit(1);	// 프로그램 비정상 종료
 	}
+	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
+		error_handling("WSAStartup() error!");
 
 	// 서버 소켓의 주소 초기화
-	pthread_mutex_init(&mutx, NULL);			// 커널에서 Mutex 쓰기 위해 얻어온다.
+	mutx = CreateMutex(NULL, FALSE, NULL);	// 커널에서 Mutex 쓰기 위해 얻어온다.
 	serv_sock = socket(PF_INET, SOCK_STREAM, 0);	// TCP용 서버 소켓 생성
 
 	memset(&serv_adr, 0, sizeof(serv_adr));		// 서버 주소 구조체 초기화
@@ -108,11 +111,11 @@ int main(int argc, char *argv[])	// 인자로 포트번호 받음
 	serv_adr.sin_port = htons(atoi(argv[1]));		// 포트는 사용자가 지정한 포트 사용
 
 													// 서버 소켓에 주소를 할당한다.
-	if (bind(serv_sock, (struct sockaddr*) &serv_adr, sizeof(serv_adr)) == -1)
+	if (bind(serv_sock, (SOCKADDR*) &serv_adr, sizeof(serv_adr)) == SOCKET_ERROR)
 		error_handling("bind() error");
 
 	// 서버 소켓을 서버용으로 설정한다.
-	if (listen(serv_sock, 5) == -1)
+	if (listen(serv_sock, 5) == -SOCKET_ERROR)
 		error_handling("listen() error");
 
 	while (1)	// 무한루프 돌면서
@@ -120,7 +123,7 @@ int main(int argc, char *argv[])	// 인자로 포트번호 받음
 		clnt_adr_sz = sizeof(clnt_adr);	// 클라이언트 구조체의 크기를 얻고
 		memset(nick, 0, sizeof(BUF_SIZE));
 		// 클라이언트의 접속을 받아 들이기 위해 Block 된다.(멈춘다)
-		clnt_sock = accept(serv_sock, (struct sockaddr*)&clnt_adr, &clnt_adr_sz);
+		clnt_sock = accept(serv_sock, (SOCKADDR*)&clnt_adr, &clnt_adr_sz);
 
 		//클라이언트에게 닉네임 받는다
 		read(clnt_sock, nick, sizeof(nick));
@@ -129,24 +132,17 @@ int main(int argc, char *argv[])	// 인자로 포트번호 받음
 		Client * client = addClient(clnt_sock, nick);
 
 		// 클라이언트 구조체의 주소를 쓰레드에게 넘긴다.(포트 포함됨)
-		pthread_create(&t_id, NULL, handle_clnt, (void*)client); // 쓰레드 시작	
-		pthread_create(&serv_id, NULL, handle_serv, (void*)client); // 
+		t_id = (HANDLE)_beginthreadex(NULL, 0,handle_clnt,(void*)client,0,&clntID);
+		serv_id = (HANDLE)_beginthreadex(NULL, 0, handle_serv, (void*)client, 0, &servID);
 
 		printf("%s is connected \n", client->name);
-
-
-		pthread_detach(serv_id);
-
-
-		pthread_detach(t_id);	// 쓰레드가 종료되면 스스로 소멸되게 함
-
 
 	}
 	close(serv_sock);
 	return 0;
 }
 
-void * handle_serv(void * arg)
+unsigned WINAPI handle_serv(void * arg)
 {
 	Client * client = (Client*)arg;
 	int serv_sock = client->socket;
@@ -182,13 +178,13 @@ void sendMessageRoom(char * msg, int roomId)   // send to the same room members
 {
 	int i;
 
-	pthread_mutex_lock(&mutx);		// 임계 영역 진입
+	WaitForSingleObject(mutx, INFINITE);		// 임계 영역 진입
 	for (i = 0; i < sizeClient; i++)		// 모든 사용자들 중에서
 	{
 		if (arrClient[i].roomId == roomId)	// 특정 방의 사람들에게
 			sendMessageUser(msg, arrClient[i].socket); // 각각 메시지전송
 	}
-	pthread_mutex_unlock(&mutx);	// 임계 영역 끝
+	ReleaseMutex(mutx);	// 임계 영역 끝
 }
 
 // 특정 사용자가 방에 들어가 있습니까?
@@ -260,11 +256,11 @@ void getSelectedRoomMenu(char * menu, char *msg)
 // 방 생성하는 함수
 Room * addRoom(char * name) // 방의 이름을 지정할 수 있다.
 {
-	pthread_mutex_lock(&mutx);		// 임계 영역 시작
+	WaitForSingleObject(mutx, INFINITE);		// 임계 영역 시작
 	Room *room = &(arrRoom[sizeRoom++]);	// 패턴은 클라이언트와 동일
 	room->id = issuedId++;			// 방의 ID 발급 - 고유해야 함
 	strcpy(room->name, name);		// 방의 이름 복사
-	pthread_mutex_unlock(&mutx);	// 임계 영역 끝
+	ReleaseMutex(mutx);	// 임계 영역 끝
 	return room;	// 생성된 방 구조체 변수의 주소 반환
 }
 
@@ -273,7 +269,7 @@ void removeRoom(int roomId)	// 방의 번호를 주면 배열에서 찾아 삭제한다.
 {
 	int i = 0;
 
-	pthread_mutex_lock(&mutx);	// 임계 영역 진입
+	WaitForSingleObject(mutx, INFINITE);	// 임계 영역 진입
 	for (i = 0; i < sizeRoom; i++)	// 모든 방에 대해서
 	{
 		if (arrRoom[i].id == roomId)	// 만약에 방을 찾았으면
@@ -284,7 +280,7 @@ void removeRoom(int roomId)	// 방의 번호를 주면 배열에서 찾아 삭제한다.
 		}
 	}
 	sizeRoom--;	// 개설된 방의 갯수를 하나 줄인다.
-	pthread_mutex_unlock(&mutx);	// 임계 영역 끝
+	ReleaseMutex(mutx);	// 임계 영역 끝
 }
 
 // 특정 방이 존재 합니까?
@@ -594,7 +590,7 @@ BOOL isEmptyRoom(int roomId)
 }
 
 // 쓰레드용 함수
-void * handle_clnt(void * arg)	// 소켓을 들고 클라이언트와 통신하는 함수
+unsigned WINAPI handle_clnt(void * arg)	// 소켓을 들고 클라이언트와 통신하는 함수
 {
 	Client * client = (Client *)arg;	// 쓰레드가 통신할 클라이언트 구조체 변수
 	int str_len = 0, i;
