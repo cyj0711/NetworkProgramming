@@ -1,13 +1,12 @@
 ﻿  client.c
-c:\users\김경숙\desktop\네프\networkprogramming\m_client\client.c(38): warning C4996: 'strcpy': This function or variable may be unsafe. Consider using strcpy_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+c:\gitproject\networkprogramming\m_client\client.c(38): warning C4996: 'strcpy': This function or variable may be unsafe. Consider using strcpy_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
   c:\program files (x86)\windows kits\10\include\10.0.17763.0\ucrt\string.h(133): note: 'strcpy' 선언을 참조하십시오.
-c:\users\김경숙\desktop\네프\networkprogramming\m_client\client.c(43): warning C4996: 'inet_addr': Use inet_pton() or InetPton() instead or define _WINSOCK_DEPRECATED_NO_WARNINGS to disable deprecated API warnings
+c:\gitproject\networkprogramming\m_client\client.c(43): warning C4996: 'inet_addr': Use inet_pton() or InetPton() instead or define _WINSOCK_DEPRECATED_NO_WARNINGS to disable deprecated API warnings
   c:\program files (x86)\windows kits\10\include\10.0.17763.0\um\winsock2.h(1831): note: 'inet_addr' 선언을 참조하십시오.
-c:\users\김경숙\desktop\네프\networkprogramming\m_client\client.c(28): warning C4101: 'thread_return' :참조되지 않은 지역 변수입니다.
-c:\users\김경숙\desktop\네프\networkprogramming\m_client\client.c(75): warning C4047: 'return': 'unsigned int'의 간접 참조 수준이 'void *'과(와) 다릅니다.
-c:\users\김경숙\desktop\네프\networkprogramming\m_client\client.c(81): warning C4047: 'return': 'unsigned int'의 간접 참조 수준이 'void *'과(와) 다릅니다.
-c:\users\김경숙\desktop\네프\networkprogramming\m_client\client.c(78): warning C4996: 'sprintf': This function or variable may be unsafe. Consider using sprintf_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+c:\gitproject\networkprogramming\m_client\client.c(28): warning C4101: 'thread_return' :참조되지 않은 지역 변수입니다.
+c:\gitproject\networkprogramming\m_client\client.c(81): warning C4047: 'return': 'unsigned int'의 간접 참조 수준이 'void *'과(와) 다릅니다.
+c:\gitproject\networkprogramming\m_client\client.c(78): warning C4996: 'sprintf': This function or variable may be unsafe. Consider using sprintf_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
   c:\program files (x86)\windows kits\10\include\10.0.17763.0\ucrt\stdio.h(1774): note: 'sprintf' 선언을 참조하십시오.
-c:\users\김경숙\desktop\네프\networkprogramming\m_client\client.c(95): warning C4047: 'return': 'unsigned int'의 간접 참조 수준이 'void *'과(와) 다릅니다.
-c:\users\김경숙\desktop\네프\networkprogramming\m_client\client.c(104): warning C4047: 'return': 'unsigned int'의 간접 참조 수준이 'void *'과(와) 다릅니다.
-  M_Client.vcxproj -> C:\Users\김경숙\Desktop\네프\NetworkProgramming\Debug\M_Client.exe
+c:\gitproject\networkprogramming\m_client\client.c(95): warning C4047: 'return': 'unsigned int'의 간접 참조 수준이 'void *'과(와) 다릅니다.
+c:\gitproject\networkprogramming\m_client\client.c(105): warning C4047: 'return': 'unsigned int'의 간접 참조 수준이 'void *'과(와) 다릅니다.
+  M_Client.vcxproj -> C:\gitproject\NetworkProgramming\Debug\M_Client.exe

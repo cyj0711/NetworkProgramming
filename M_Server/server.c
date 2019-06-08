@@ -63,7 +63,7 @@ Client *addClient(SOCKET socket, char *nick) //custom: 소켓 매개변수타입을 SOCKE
 }
 
 // 클라이언트를 배열에서 제거 - 소켓을 주면 클라이언트를 배열에서 삭제한다.
-void removeClient(int socket)
+void removeClient(SOCKET socket)
 {
 	WaitForSingleObject(mutx, INFINITE);		// 임계영역 시작
 	int i = 0;
@@ -71,6 +71,7 @@ void removeClient(int socket)
 	{
 		if (socket == arrClient[i].socket)	// 끊긴 클라이언트를 찾았으면
 		{
+			printf("User(%d) quit the program.\n", (int)socket);
 			while (i++ < sizeClient - 1)	// 찾은 소켓뒤로 모든 소켓에 대해
 				arrClient[i] = arrClient[i + 1]; // 한칸씩 앞으로 당김
 			break;	// for문 탈출
@@ -167,7 +168,7 @@ unsigned WINAPI handle_serv(void * arg)
 
 				closesocket(arrClient[i].socket);
 			}
-			//exit(0);
+			exit(0);
 		}
 
 	}
@@ -414,7 +415,7 @@ void listMember(Client *client, int roomId) // list client in a room
 
 
 
-int getRoomId(int socket)      // socket은 클라이언트 ID
+int getRoomId(SOCKET socket)      // socket은 클라이언트 ID
 {
 	int i, roomId = -1;         // 방의 ID 초기값은 -1(못찾음)
 	char buf[BUF_SIZE] = "";   // 사용자에게 보낼 메시지 버퍼
@@ -616,13 +617,13 @@ unsigned WINAPI handle_clnt(void * arg)	// 소켓을 들고 클라이언트와 통신하는 함�
 
 	printWaitingRoomMenu(client);	// 채팅을 시작할 때 처음에 방 메뉴 표시
 
-	int clnt_sock = client->socket;	// 통신할 소켓 얻고
+	SOCKET clnt_sock = client->socket;	// 통신할 소켓 얻고
 	int roomId = client->roomId;	// 방의 번호도 빼 놓는다.
 
 									// 클라이언트가 통신을 끊지 않는한 계속 서비스를 제공한다.
-	while ((str_len = recv(clnt_sock, msg, BUF_SIZE, 0)) != 0)
+	while ((str_len = recv(clnt_sock, msg, BUF_SIZE, 0)) != SOCKET_ERROR)
 	{
-		printf("Read User(%d):%s\n", clnt_sock, msg); // 디버깅용으로 상태로그 표시
+		printf("Read User(%d):%s\n", (int)clnt_sock, msg); // 디버깅용으로 상태로그 표시
 
 		if (isInARoom(clnt_sock))	// 방 안에서 클라이언트가 메시지를 보내는 경우
 		{

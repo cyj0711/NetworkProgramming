@@ -95,6 +95,7 @@ unsigned WINAPI recv_msg(void * arg)   // read thread main
 			return (void*)-1;	// 쓰레드 종료
 		}
 		else if (!strcmp(name_msg, "q\n") || !strcmp(name_msg, "Q\n")) {
+			printf("server is closed.\n");
 			closesocket(sock);
 			exit(0);
 		}
