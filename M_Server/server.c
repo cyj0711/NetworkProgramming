@@ -393,6 +393,12 @@ void listMember(Client *client, int roomId) // list client in a room
 	int i = 0;					// 제어변수
 	int sizeMember = 0;			// 접속중인 사용자의 수
 
+	if (roomId == -1)				// 해당하는 방이 없을 경우
+	{
+		sprintf(buf, "[server] : invalidroomId\n");	// 그런 방 없음 출력
+		sendMessageUser(buf, client->socket);
+		return;
+	}
 								// "특정 방에 있는 사용자의 목록을 표시하겠습니다."
 	sprintf(buf, "[server] : List Member In This Room\n");
 	sendMessageUser(buf, client->socket); // 안내 메시지 표시
@@ -647,6 +653,11 @@ unsigned WINAPI handle_clnt(void * arg)	// 소켓을 들고 클라이언트와 통신하는 함�
 	}
 
 	removeClient(clnt_sock);	// 클라언트와 연결이 종료되면 클라이언트 배열에서 제거한다.
+
+	if (isEmptyRoom(client->roomId))			// 방에서 q로 바로 종료할 경우(비정상 적인 종료)에 대한 빈방 제거
+	{
+		removeRoom(client->roomId);		
+	}
 
 	closesocket(clnt_sock);			// 소켓을 닫고
 	return NULL;				// 쓰레드 종료
