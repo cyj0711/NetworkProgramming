@@ -49,6 +49,7 @@ int issuedId = 0;			// 발급된 ID
 
 BOOL isEmptyRoom(int roomId);
 void printHowToUse(Client * client);
+void printWaitingRoomMenu(Client * client);
 
 // 클라이언트를 배열에 추가 - 소켓을 주면 클라이언트 구조체변수를 생성해 준다.
 Client *addClient(SOCKET socket, char *nick) //custom: 소켓 매개변수타입을 SOCKET으로 바꿈
@@ -320,6 +321,7 @@ void enterRoom(Client * client, int roomId) // 클라이언트가 roomID의 방에 들어간
 	{
 		client->roomId = roomId;	// 클라이언트는 방의 ID를 가지게 된다.
 		sprintf(buf, "[server] : **%s Join the Room**\n", client->name); // 확인 메시지 작성
+		sendMessageUser("cls\n", client->socket);
 		sendMessageUser(her, client->socket);
 	}
 
@@ -369,6 +371,8 @@ void listRoom(Client * client)	// 특정 사용자가 방의 목록을 보고 싶어한다.
 	char buf[BUF_SIZE] = "";	// 클라이언트에게 전송할 메시지 버퍼
 	int i = 0;					// 제어 변수
 
+	printWaitingRoomMenu(client);
+
 	sprintf(buf, "[server] : List Room:\n");	// "방 목록을 표시하겠습니다."	
 	sendMessageUser(buf, client->socket);
 
@@ -392,6 +396,8 @@ void listMember(Client *client, int roomId) // list client in a room
 	char buf[BUF_SIZE] = "";		// 사용자에게 전송할 메시지용 버퍼
 	int i = 0;					// 제어변수
 	int sizeMember = 0;			// 접속중인 사용자의 수
+
+	printWaitingRoomMenu(client);
 
 	if (roomId == -1)				// 해당하는 방이 없을 경우
 	{
@@ -428,6 +434,7 @@ int getRoomId(SOCKET socket)      // socket은 클라이언트 ID
 	char Roomname[BUF_SIZE] = "";
 	char originRoomname[BUF_SIZE] = "";
 	// 안내 메시지 표시
+
 	sprintf(buf, "[system] : Input Room Name:\n");   // "방의 ID를 입력하시오"
 	sendMessageUser(buf, socket);         // 사용자에게 메시지 전송
 
@@ -453,6 +460,9 @@ int getRoomId(SOCKET socket)      // socket은 클라이언트 ID
 void printWaitingRoomMenu(Client * client)
 {
 	char buf[BUF_SIZE] = "";
+
+	sendMessageUser("cls\n", client->socket);
+
 	sprintf(buf, "[system] : Waiting Room Menu:\n");	// 대기실 메뉴는 이렇습니다.
 	sendMessageUser(buf, client->socket);
 
@@ -495,6 +505,9 @@ void printRoomMenu(Client *client)
 void printHowToUse(Client *client) //사용법 보여주기
 {
 	char buf[BUF_SIZE] = "";
+
+	printWaitingRoomMenu(client);
+
 	sprintf(buf, "**Menu**\n");
 	sendMessageUser(buf, client->socket);
 
