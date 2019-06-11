@@ -99,6 +99,11 @@ unsigned WINAPI recv_msg(void * arg)   // read thread main
 			closesocket(sock);
 			exit(0);
 		}
+		else if (!strcmp(name_msg, "cls\n"))
+		{
+			system("cls");
+			continue;
+		}
 
 		fputs(name_msg, stdout);	// 화면에 수신된 메시지 표시
 	}
