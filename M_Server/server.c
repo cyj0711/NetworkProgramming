@@ -1,3 +1,4 @@
+#define _CRT_SECURE_NO_WARNINGS
 #include <stdio.h>			// 표준 입출력 :wq
 #include <stdlib.h>			// 표준 라이브러리
 #include <string.h>			// 문자열 처리	
@@ -15,11 +16,6 @@ typedef int BOOL;			// boolean 타입 선언(예, 아니오 판단 결과)
 #define FALSE	0			// boolean 거짓(아니오)
 
 							// 함수들 선언
-
-unsigned WINAPI handle_serv(void * arg); // 서버 쓰레드용 함수
-unsigned WINAPI handle_clnt(void * arg);		// 클라이언트 쓰레드용 함수(함수 포인터)
-void error_handling(char * msg);	// 에러 처리 함수
-void sendMessageUser(char * msg, SOCKET socket);
 
 HANDLE mutx;		// 상호배제를 위한 전역변수
 
@@ -39,6 +35,7 @@ struct Room					// 채팅방 구조체 선언
 {
 	int id;					// 방의 번호
 	char name[BUF_SIZE];	// 방의 이름
+	char notice[BUF_SIZE];
 };
 typedef struct Room Room;
 
@@ -47,9 +44,28 @@ Room arrRoom[MAX_ROOM];		// Room의 배열(현재 개설된 방의 배열)
 
 int issuedId = 0;			// 발급된 ID
 
+unsigned WINAPI handle_serv(void* arg); // 서버 쓰레드용 함수
+unsigned WINAPI handle_clnt(void* arg);		// 클라이언트 쓰레드용 함수(함수 포인터)
+void error_handling(char* msg);	// 에러 처리 함수
+void sendMessageUser(char* msg, SOCKET socket);
 BOOL isEmptyRoom(int roomId);
-void printHowToUse(Client * client);
-void printWaitingRoomMenu(Client * client);
+void printHowToUse(Client* client);
+void printWaitingRoomMenu(Client* client);
+void removeClient(SOCKET socket);
+void serveRoomMenu(char* menu, Client* client, char* msg);
+void setNotice(Client* client, char* notice);
+void sendMessageRoom(char* msg, int roomId);
+void exitRoom(Client* client);
+void listMember(Client* client, int roomId);
+void printRoomMenu(Client* client);
+void printWaitingRoomMenu(Client* client);
+
+// 모두에게 메시지를 보내는게 아니라, 특정 사용자에게만 메시지를 보낸다.
+void sendMessageUser(char* msg, SOCKET socket)   // send to a members 
+{
+	//int length = write(socket, msg, BUF_SIZE);
+	int length = send(socket, msg, BUF_SIZE, 0);
+}
 
 // 클라이언트를 배열에 추가 - 소켓을 주면 클라이언트 구조체변수를 생성해 준다.
 Client *addClient(SOCKET socket, char *nick) //custom: 소켓 매개변수타입을 SOCKET으로 바꿈
@@ -82,74 +98,49 @@ void removeClient(SOCKET socket)
 	ReleaseMutex(mutx);	// 임계영역 끝
 }
 
-
-int main(int argc, char *argv[])	// 인자로 포트번호 받음
+// 방에서 메뉴를 선택했을 때 제공할 서비스(서버가 해야 할 일)
+void serveRoomMenu(char* menu, Client* client, char* msg)
 {
-	WSADATA wsaData;
-	SOCKET serv_sock, clnt_sock;		// 소켓통신 용 서버 소켓과 임시 클라이언트 소켓
-	SOCKADDR_IN serv_adr, clnt_adr;	// 서버 주소, 클라이언트 주소 구조체
-	int clnt_adr_sz;				// 클라이언트 주소 구조체 크기
-	char nick[BUF_SIZE] = { 0 }; //nickname
-	int nick_len; //nickname 길이
-	unsigned clntID;
-	unsigned servID;
-	HANDLE t_id;					// 클라이언트 쓰레드용 ID
-	HANDLE serv_id;
-	void * thread_return;
-	
-	// 포트 입력안했으면
-	if (argc != 2) {
-		printf("Usage : %s <port>\n", argv[0]);	// 사용법을 알려준다.
-		exit(1);	// 프로그램 비정상 종료
+	char buf[BUF_SIZE] = "";
+	char notice[BUF_SIZE] = "";
+	char name[BUF_SIZE] = "";
+
+	printf("Server Menu : %s\n", menu);   // 서버 쪽에 찍히는 메시지(디버깅용)
+
+	if (strcmp(menu, "@exit") == 0) {         // exit - 방 나가기
+		sprintf(buf, "\t\t** %s out **\n", client->name);
+		sendMessageRoom(buf, client->roomId);
+		exitRoom(client);
+	}
+	else if (strcmp(menu, "@list") == 0) {         // list - 같은 방에 있는 사람 목록 표시
+		listMember(client, client->roomId);
+	}
+	else if (strcmp(menu, "@help") == 0) {            // help - 방의 메뉴 표시
+		printRoomMenu(client);
 	}
 
-	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
-		error_handling("WSAStartup() error!");
-
-	// 서버 소켓의 주소 초기화
-	mutx = CreateMutex(NULL, FALSE, NULL);	// 커널에서 Mutex 쓰기 위해 얻어온다.
-	serv_sock = socket(PF_INET, SOCK_STREAM, 0);	// TCP용 서버 소켓 생성
-
-	memset(&serv_adr, 0, sizeof(serv_adr));		// 서버 주소 구조체 초기화
-	serv_adr.sin_family = AF_INET;				// 인터넷 통신
-	serv_adr.sin_addr.s_addr = htonl(INADDR_ANY);	// 현재 IP를 이용하고
-	serv_adr.sin_port = htons(atoi(argv[1]));		// 포트는 사용자가 지정한 포트 사용
-
-													// 서버 소켓에 주소를 할당한다.
-	if (bind(serv_sock, (SOCKADDR*) &serv_adr, sizeof(serv_adr)) == SOCKET_ERROR)
-		error_handling("bind() error");
-
-	// 서버 소켓을 서버용으로 설정한다.
-	if (listen(serv_sock, MAX_CLNT) == -SOCKET_ERROR) //custom: backlog 값을 MAX_CLNT로 바꿈
-		error_handling("listen() error");
-
-	while (1)	// 무한루프 돌면서
-	{
-		clnt_adr_sz = sizeof(clnt_adr);	// 클라이언트 구조체의 크기를 얻고
-		memset(nick, 0, sizeof(BUF_SIZE));
-		// 클라이언트의 접속을 받아 들이기 위해 Block 된다.(멈춘다)
-		clnt_sock = accept(serv_sock, (SOCKADDR*)&clnt_adr, &clnt_adr_sz);
-
-		//클라이언트에게 닉네임 받는다
-		//read(clnt_sock, nick, sizeof(nick));
-		nick_len = recv(clnt_sock, nick, BUF_SIZE - 1, 0);
-		
-
-		// 클라이언트와 접속이 되면 클라이언트 소켓을 배열에 추가하고 그 주소를 얻는다.
-		Client *client = addClient(clnt_sock, nick);
-
-		// 클라이언트 구조체의 주소를 쓰레드에게 넘긴다.(포트 포함됨)
-		t_id = (HANDLE)_beginthreadex(NULL, 0,handle_clnt,(void*)client,0,&clntID);
-		serv_id = (HANDLE)_beginthreadex(NULL, 0, handle_serv, (void*)client, 0, &servID);
-
-		printf("%s is connected \n", client->name);
-
+	else if (strcmp(menu, "@setn") == 0) {
+		recv(client->socket, buf, sizeof(buf), 0);
+		setNotice(client, buf);
 	}
-	closesocket(clnt_sock);
-	closesocket(serv_sock);
-	WSACleanup();
-	return 0;
+
+	else if (strcmp(menu, "@getn") == 0) {
+		sendMessageUser(arrRoom[client->roomId].notice, client->socket);
+	}
+
+	else    // send normal chat message
+		sendMessageRoom(msg, client->roomId);   // 일반 채팅 메시지
 }
+
+void setNotice(Client* client, char* notice)
+{
+	int index = client->roomId;
+	strcpy(arrRoom[index].notice, notice);
+
+	return;
+}
+
+
 
 unsigned WINAPI handle_serv(void * arg)
 {
@@ -176,12 +167,7 @@ unsigned WINAPI handle_serv(void * arg)
 	return NULL;
 }
 
-// 모두에게 메시지를 보내는게 아니라, 특정 사용자에게만 메시지를 보낸다.
-void sendMessageUser(char *msg, SOCKET socket)   // send to a members 
-{
-	//int length = write(socket, msg, BUF_SIZE);
-	int length = send(socket, msg, BUF_SIZE, 0);
-}
+
 
 // 특정 방 안에 있는 모든 사람에게 메시지 보내기
 void sendMessageRoom(char *msg, int roomId)   // send to the same room members 
@@ -262,7 +248,7 @@ void getSelectedRoomMenu(char * menu, char *msg)
 	strcpy(menu, firstByte);
 
 	// all menus have 4 byte length. remove \n
-	menu[4] = 0;	// 4바이트 에서 NULL 문자 넣어 문자열 끊기
+	menu[5] = 0;	// 4바이트 에서 NULL 문자 넣어 문자열 끊기
 	return;
 }
 
@@ -311,16 +297,16 @@ BOOL isExistRoom(int roomId)	// 방의 번호를 주고, 만들어진 방인지 확인한다.
 // 사용자가 특정 방에 들어가기
 void enterRoom(Client * client, int roomId) // 클라이언트가 roomID의 방에 들어간다.
 {
-	char her[BUF_SIZE] = "**Commands in ChatRoom**\n exit : Exit Room \n list : User in this room \n help : This message \n";
+	char her[BUF_SIZE] = "- - - - - - - Commands in ChatRoom - - - - - - - -\n\t\t@exit : Exit Room \n\t\t@list : User in this room\n\t\t@help : This message\n\t\t@setn : Set notice\n\t\t@getn : Get notice\n- - - - - - - - - - - - - - - - - - - - - - - - -\n";
 	char buf[BUF_SIZE] = "";
 	if (!isExistRoom(roomId))	// 방이 존재하지 않으면
 	{
-		sprintf(buf, "[server] : invalidroomId\n");	// 못들어 간다. 에러 메시지 작성
+		sprintf(buf, "[server] : invalid room Id\n");	// 못들어 간다. 에러 메시지 작성
 	}
 	else	// 방을 찾았으면
 	{
 		client->roomId = roomId;	// 클라이언트는 방의 ID를 가지게 된다.
-		sprintf(buf, "[server] : **%s Join the Room**\n", client->name); // 확인 메시지 작성
+		sprintf(buf, "\t\t** %s Join the Room **\n", client->name); // 확인 메시지 작성
 		sendMessageUser("cls\n", client->socket);
 		sendMessageUser(her, client->socket);
 	}
@@ -397,16 +383,16 @@ void listMember(Client *client, int roomId) // list client in a room
 	int i = 0;					// 제어변수
 	int sizeMember = 0;			// 접속중인 사용자의 수
 
-	printWaitingRoomMenu(client);
+	//printWaitingRoomMenu(client);
 
 	if (roomId == -1)				// 해당하는 방이 없을 경우
 	{
-		sprintf(buf, "[server] : invalidroomId\n");	// 그런 방 없음 출력
+		sprintf(buf, "[server] : invalid room Id\n");	// 그런 방 없음 출력
 		sendMessageUser(buf, client->socket);
 		return;
 	}
 								// "특정 방에 있는 사용자의 목록을 표시하겠습니다."
-	sprintf(buf, "[server] : List Member In This Room\n");
+	sprintf(buf, "- - - - - - List Member In This Room - - - - - -\n");
 	sendMessageUser(buf, client->socket); // 안내 메시지 표시
 
 	for (i = 0; i < sizeClient; i++)	// 모든 사용자에 대해서
@@ -414,14 +400,14 @@ void listMember(Client *client, int roomId) // list client in a room
 		if (arrClient[i].roomId == roomId)	// 만약 특정 방에 들어가 있으면
 		{
 			// 번호, 소켓번호(고객의 ID) 순으로 표시해 준다.
-			sprintf(buf, "Name : %s\n", arrClient[i].name);
+			sprintf(buf, "Name :\t\t%s\n", arrClient[i].name);
 			sendMessageUser(buf, client->socket);
 			sizeMember++;	// 특정 방에 있는 총 사용자의 수 계산
 		}
 	}
 
 	// 특정 방에 있는 사용자의 수를 표시한다.
-	sprintf(buf, "Total: %d Members\n", sizeMember);
+	sprintf(buf, "\tTotal: %d Members\n- - - - - - - - - - - - - - - - - - - - - - - - -\n", sizeMember);
 	sendMessageUser(buf, client->socket);
 }
 
@@ -463,25 +449,25 @@ void printWaitingRoomMenu(Client * client)
 
 	sendMessageUser("cls\n", client->socket);
 
-	sprintf(buf, "[system] : Waiting Room Menu:\n");	// 대기실 메뉴는 이렇습니다.
+	sprintf(buf, "- - - - - - - - - - - Menu - - - - - - - - - - -\n");	// 대기실 메뉴는 이렇습니다.
 	sendMessageUser(buf, client->socket);
 
-	sprintf(buf, "1) Create Room\n");				// 방 만들기
+	sprintf(buf, "\t\t1) Create Room\n");				// 방 만들기
 	sendMessageUser(buf, client->socket);
 
-	sprintf(buf, "2) List Room\n");					// 방 목록 표시하기
+	sprintf(buf, "\t\t2) List Room\n");					// 방 목록 표시하기
 	sendMessageUser(buf, client->socket);
 
-	sprintf(buf, "3) Enter Room\n");					// 특정 방에 들어가기
+	sprintf(buf, "\t\t3) Enter Room\n");					// 특정 방에 들어가기
 	sendMessageUser(buf, client->socket);
 
-	sprintf(buf, "4) Info Room\n");
+	sprintf(buf, "\t\t4) Info Room\n");
 	sendMessageUser(buf, client->socket);
 
-	sprintf(buf, "5) How To Use\n");
+	sprintf(buf, "\t\t5) How To Use\n");
 	sendMessageUser(buf, client->socket);
 
-	sprintf(buf, "q Or Q) Quit\n");						// 종료하기(연결 끊기)
+	sprintf(buf, "\t\tq Or Q) Quit\n- - - - - - - - - - - - - - - - - - - - - - - -\n");						// 종료하기(연결 끊기)
 	sendMessageUser(buf, client->socket);
 }
 
@@ -489,16 +475,22 @@ void printWaitingRoomMenu(Client * client)
 void printRoomMenu(Client *client)
 {
 	char buf[BUF_SIZE] = "";
-	sprintf(buf, "[system] : Room Menu:\n");		// 방 메뉴 표시
+	sprintf(buf, "- - - - - - - - - - Room Menu - - - - - - - - - -\n");		// 방 메뉴 표시
 	sendMessageUser(buf, client->socket);
 
-	sprintf(buf, "exit) Exit Room\n");			// 방 나가기
+	sprintf(buf, "\t\t@exit) Exit Room\n");			// 방 나가기
 	sendMessageUser(buf, client->socket);
 
-	sprintf(buf, "list) List Room\n");			// 개설된 방의 목록 표시하기
+	sprintf(buf, "\t\t@list) List Room\n");			// 개설된 방의 목록 표시하기
 	sendMessageUser(buf, client->socket);
 
-	sprintf(buf, "help) This message\n");		// 도움말 표시하기
+	sprintf(buf, "\t\t@help) This message\n");		// 도움말 표시하기
+	sendMessageUser(buf, client->socket);
+
+	sprintf(buf, "\t\t@setn) set notice\n");         // 공지 설정하기
+	sendMessageUser(buf, client->socket);
+
+	sprintf(buf, "\t\t@getn) get notice\n- - - - - - - - - - - - - - - - - - - - - - - - -\n");         // 공지 받아오기
 	sendMessageUser(buf, client->socket);
 }
 
@@ -508,31 +500,37 @@ void printHowToUse(Client *client) //사용법 보여주기
 
 	printWaitingRoomMenu(client);
 
-	sprintf(buf, "**Menu**\n");
+	sprintf(buf, "- - - - - - - - - - - Menu - - - - - - - - - - -\n");
 	sendMessageUser(buf, client->socket);
 
-	sprintf(buf, "1.CreateRoom : Create chat room and enter the room\n");
+	sprintf(buf, "\t\t1.CreateRoom : Create chat room and enter the room\n");
 	sendMessageUser(buf, client->socket);
 
-	sprintf(buf, "2.ListRoom : Show all created chat rooms\n");
+	sprintf(buf, "\t\t2.ListRoom : Show all created chat rooms\n");
 	sendMessageUser(buf, client->socket);
 
-	sprintf(buf, "3.EnterRoom : Enter the chat room\n");
+	sprintf(buf, "\t\t3.EnterRoom : Enter the chat room\n");
 	sendMessageUser(buf, client->socket);
 
-	sprintf(buf, "4.InfoRoom : Show all users in certain chat room\n");
+	sprintf(buf, "\t\t4.InfoRoom : Show all users in certain chat room\n");
 	sendMessageUser(buf, client->socket);
 
-	sprintf(buf, "**Commands in ChatRoom**\n");
+	sprintf(buf, "- - - - - - - - Commands in ChatRoom - - - - - - - -\n");
 	sendMessageUser(buf, client->socket);
 
-	sprintf(buf, "1. exit : Exit room\n");
+	sprintf(buf, "\t\t@exit : Exit room\n");
 	sendMessageUser(buf, client->socket);
 
-	sprintf(buf, "2. list : Users in the chat room\n");
+	sprintf(buf, "\t\t@list : Users in the chat room\n");
 	sendMessageUser(buf, client->socket);
 
-	sprintf(buf, "3. help : Manual of Commands in chat room\n");
+	sprintf(buf, "\t\t@help : Manual of Commands in chat room\n");
+	sendMessageUser(buf, client->socket);
+
+	sprintf(buf, "\t\t@setn : Set notice\n");
+	sendMessageUser(buf, client->socket);
+
+	sprintf(buf, "\t\t@getn : Get notice\n- - - - - - - - - - - - - - - - - - - - - - - -\n");
 	sendMessageUser(buf, client->socket);
 
 }
@@ -562,14 +560,8 @@ void serveWaitingRoomMenu(int menu, Client *client, char *msg) // 사용자와 선택�
 		printHowToUse(client);
 		break;
 
-	case 'q':
-
-	case 'Q':
-
-		break;
-
 	default:
-		sendMessageUser(msg, client->socket);
+		//sendMessageUser(msg, client->socket);
 		//printWaitingRoomMenu(client);		// 잘못 입력했으면, 메뉴 다시 표시
 		break;
 	}
@@ -591,27 +583,6 @@ void exitRoom(Client *client)	// 인자는 나갈 클라이언트
 	{
 		removeRoom(roomId);		// 방을 소멸 시킨다.
 	}
-}
-
-// 방에서 메뉴를 선택했을 때 제공할 서비스(서버가 해야 할 일)
-void serveRoomMenu(char * menu, Client *client, char *msg)
-{
-	char buf[BUF_SIZE] = "";
-	printf("Server Menu : %s\n", menu);	// 서버 쪽에 찍히는 메시지(디버깅용)
-
-	if (strcmp(menu, "exit") == 0) {			// exit - 방 나가기
-		sprintf(buf, "%s out\n", client->name);
-		sendMessageRoom(buf, client->roomId);
-		exitRoom(client);
-	}
-	else if (strcmp(menu, "list") == 0) {			// list - 같은 방에 있는 사람 목록 표시
-		listMember(client, client->roomId);
-	}
-	else if (strcmp(menu, "help") == 0) {				// help - 방의 메뉴 표시
-		printRoomMenu(client);
-	}
-	else    // send normal chat message
-		sendMessageRoom(msg, client->roomId);	// 일반 채팅 메시지
 }
 
 // 특정 방에 사람이 있습니까?
@@ -684,4 +655,70 @@ void error_handling(char * msg)
 	exit(1);				// 프로그램 종료
 }
 
+int main(int argc, char* argv[])	// 인자로 포트번호 받음
+{
+	WSADATA wsaData;
+	SOCKET serv_sock, clnt_sock;		// 소켓통신 용 서버 소켓과 임시 클라이언트 소켓
+	SOCKADDR_IN serv_adr, clnt_adr;	// 서버 주소, 클라이언트 주소 구조체
+	int clnt_adr_sz;				// 클라이언트 주소 구조체 크기
+	char nick[BUF_SIZE] = { 0 }; //nickname
+	int nick_len; //nickname 길이
+	unsigned clntID;
+	unsigned servID;
+	HANDLE t_id;					// 클라이언트 쓰레드용 ID
+	HANDLE serv_id;
+	void* thread_return;
 
+	// 포트 입력안했으면
+	if (argc != 2) {
+		printf("Usage : %s <port>\n", argv[0]);	// 사용법을 알려준다.
+		exit(1);	// 프로그램 비정상 종료
+	}
+
+	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
+		error_handling("WSAStartup() error!");
+
+	// 서버 소켓의 주소 초기화
+	mutx = CreateMutex(NULL, FALSE, NULL);	// 커널에서 Mutex 쓰기 위해 얻어온다.
+	serv_sock = socket(PF_INET, SOCK_STREAM, 0);	// TCP용 서버 소켓 생성
+
+	memset(&serv_adr, 0, sizeof(serv_adr));		// 서버 주소 구조체 초기화
+	serv_adr.sin_family = AF_INET;				// 인터넷 통신
+	serv_adr.sin_addr.s_addr = htonl(INADDR_ANY);	// 현재 IP를 이용하고
+	serv_adr.sin_port = htons(atoi(argv[1]));		// 포트는 사용자가 지정한 포트 사용
+
+													// 서버 소켓에 주소를 할당한다.
+	if (bind(serv_sock, (SOCKADDR*)& serv_adr, sizeof(serv_adr)) == SOCKET_ERROR)
+		error_handling("bind() error");
+
+	// 서버 소켓을 서버용으로 설정한다.
+	if (listen(serv_sock, MAX_CLNT) == -SOCKET_ERROR) //custom: backlog 값을 MAX_CLNT로 바꿈
+		error_handling("listen() error");
+
+	while (1)	// 무한루프 돌면서
+	{
+		clnt_adr_sz = sizeof(clnt_adr);	// 클라이언트 구조체의 크기를 얻고
+		memset(nick, 0, sizeof(BUF_SIZE));
+		// 클라이언트의 접속을 받아 들이기 위해 Block 된다.(멈춘다)
+		clnt_sock = accept(serv_sock, (SOCKADDR*)& clnt_adr, &clnt_adr_sz);
+
+		//클라이언트에게 닉네임 받는다
+		//read(clnt_sock, nick, sizeof(nick));
+		nick_len = recv(clnt_sock, nick, BUF_SIZE - 1, 0);
+
+
+		// 클라이언트와 접속이 되면 클라이언트 소켓을 배열에 추가하고 그 주소를 얻는다.
+		Client* client = addClient(clnt_sock, nick);
+
+		// 클라이언트 구조체의 주소를 쓰레드에게 넘긴다.(포트 포함됨)
+		t_id = (HANDLE)_beginthreadex(NULL, 0, handle_clnt, (void*)client, 0, &clntID);
+		serv_id = (HANDLE)_beginthreadex(NULL, 0, handle_serv, (void*)client, 0, &servID);
+
+		printf("%s is connected \n", client->name);
+
+	}
+	closesocket(clnt_sock);
+	closesocket(serv_sock);
+	WSACleanup();
+	return 0;
+}

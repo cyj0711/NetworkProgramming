@@ -1,3 +1,4 @@
+#define _CRT_SECURE_NO_WARNINGS
 #include <stdio.h>				// 표준 입출력
 #include <stdlib.h>				// 표준 라이브러리
 #include <string.h>				// 문자열 처리
