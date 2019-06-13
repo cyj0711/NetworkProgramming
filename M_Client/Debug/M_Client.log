@@ -1,8 +1,1 @@
-﻿  client.c
-C:\Whale\WorkSpace\Github\NetworkProgramming\M_Client\client.c(44,1): warning C4996:  'inet_addr': Use inet_pton() or InetPton() instead or define _WINSOCK_DEPRECATED_NO_WARNINGS to disable deprecated API warnings
-C:\Program Files (x86)\Windows Kits\10\Include\10.0.17763.0\um\WinSock2.h(1831): message :  'inet_addr' 선언을 참조하십시오.
-C:\Whale\WorkSpace\Github\NetworkProgramming\M_Client\client.c(29,9): warning C4101:  'thread_return' :참조되지 않은 지역 변수입니다.
-C:\Whale\WorkSpace\Github\NetworkProgramming\M_Client\client.c(82,13): warning C4047:  'return': 'unsigned int'의 간접 참조 수준이 'void *'과(와) 다릅니다.
-C:\Whale\WorkSpace\Github\NetworkProgramming\M_Client\client.c(96,20): warning C4047:  'return': 'unsigned int'의 간접 참조 수준이 'void *'과(와) 다릅니다.
-C:\Whale\WorkSpace\Github\NetworkProgramming\M_Client\client.c(111,13): warning C4047:  'return': 'unsigned int'의 간접 참조 수준이 'void *'과(와) 다릅니다.
-  M_Client.vcxproj -> C:\Whale\WorkSpace\Github\NetworkProgramming\Debug\M_Client.exe
+﻿  M_Client.vcxproj -> C:\Users\김경숙\Desktop\네프\NetworkProgramming\Debug\M_Client.exe
